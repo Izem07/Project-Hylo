@@ -1,11 +1,15 @@
-name: Build IPA
+name: iOS Build & Release
 
 on:
   push:
     branches: [ "main", "master" ]
+    tags:     [ "v*.*.*" ]
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create GitHub Releases on tag pushes
 
 jobs:
   build:
@@ -23,7 +27,7 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      - name: Generate Xcode Project
+      - name: Generate Xcode project
         working-directory: Hylo
         run: xcodegen generate
 
@@ -47,10 +51,34 @@ jobs:
           mkdir -p build/Payload
           cp -r build/Release-iphoneos/Hylo.app build/Payload/
           cd build
-          zip -r Hylo.ipa Payload
+          # Use tag name for release builds, short SHA for CI builds
+          IPA_NAME="Hylo-${{ github.ref_type == 'tag' && github.ref_name || github.sha }}.ipa"
+          zip -r "$IPA_NAME" Payload
+          echo "IPA_NAME=$IPA_NAME" >> $GITHUB_ENV
 
-      - name: Upload IPA Artifact
+      - name: Upload IPA as workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: Hylo-IPA
-          path: Hylo/build/Hylo.ipa
+          path: Hylo/build/${{ env.IPA_NAME }}
+
+      # Only runs when a v*.*.* tag is pushed
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Hylo ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body: |
+            ## Hylo ${{ github.ref_name }}
+
+            ### Installation
+            This IPA is **unsigned**. To install it on a device you will need to re-sign it with your own certificate using a tool like [AltStore](https://altstore.io), [Sideloadly](https://sideloadly.io), or Xcode.
+
+            **Steps with Sideloadly:**
+            1. Download `Hylo-${{ github.ref_name }}.ipa`
+            2. Open Sideloadly and connect your iPhone
+            3. Drag the IPA in and sign with your Apple ID
+          files: Hylo/build/${{ env.IPA_NAME }}
