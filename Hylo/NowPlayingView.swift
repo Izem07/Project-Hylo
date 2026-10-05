@@ -96,7 +96,7 @@ struct NowPlayingView: View {
                             .fontWeight(.semibold)
                             .foregroundColor(hyloYellow) // Hylo Brand Color
                         
-                        Text("Demon Days")
+                        Text(playerViewModel.currentSong?.album ?? "Unknown Album")
                             .font(.subheadline)
                             .foregroundColor(.gray)
                     }

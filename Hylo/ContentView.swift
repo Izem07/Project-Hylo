@@ -1,176 +1,112 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var playerVM = PlayerViewModel()
-    @StateObject private var offlineManager = OfflineManager.shared
-    @StateObject private var navidrome = NavidromeService.shared
-
-    @State private var searchQuery = ""
-    @State private var searchResults: [Song] = []
-    @State private var isSearching = false
-    @State private var showNowPlaying = false
-
+    @StateObject private var playerViewModel = PlayerViewModel()
+    @StateObject private var networkMonitor = NetworkMonitor.shared
+    @State private var showingNowPlaying = false
+    
+    // Hylo Brand Color
     let hyloYellow = Color(red: 0.98, green: 0.8, blue: 0.1)
-
+    
     var body: some View {
         ZStack(alignment: .bottom) {
-            TabView {
-                // MARK: - Search Tab
-                NavigationView {
-                    VStack(spacing: 0) {
-                        // Search bar
-                        HStack {
-                            Image(systemName: "magnifyingglass").foregroundColor(.gray)
-                            TextField("Search your Navidrome library…", text: $searchQuery)
-                                .foregroundColor(.white)
-                                .submitLabel(.search)
-                                .onSubmit {
-                                    isSearching = true
-                                    navidrome.search(query: searchQuery) { results in
-                                        searchResults = results
-                                        isSearching = false
-                                    }
-                                }
-                            if isSearching {
-                                ProgressView().tint(.yellow)
-                            }
-                        }
-                        .padding(12)
-                        .background(Color.white.opacity(0.08))
-                        .cornerRadius(10)
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-
-                        if searchResults.isEmpty && !searchQuery.isEmpty && !isSearching {
-                            Spacer()
-                            Text("No results for "\(searchQuery)"")
-                                .foregroundColor(.gray)
-                            Spacer()
-                        } else {
-                            List(searchResults) { song in
-                                SongRow(song: song, playerVM: playerVM, offlineManager: offlineManager)
-                                    .listRowBackground(Color.black)
-                            }
-                            .listStyle(.plain)
-                        }
+            VStack(spacing: 0) {
+                // Connection Lost Banner
+                if !networkMonitor.isConnected {
+                    HStack(spacing: 8) {
+                        Image(systemName: "wifi.slash")
+                            .font(.caption)
+                        Text("No connection — Offline mode active")
+                            .font(.caption)
+                            .fontWeight(.semibold)
                     }
-                    .background(Color.black.ignoresSafeArea())
-                    .navigationTitle("Search")
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(hyloYellow)
                 }
-                .tabItem { Label("Search", systemImage: "magnifyingglass") }
-
-                // MARK: - Offline Tab
-                OfflineView(playerViewModel: playerVM)
-                    .tabItem { Label("Offline", systemImage: "arrow.down.circle.fill") }
-
-                // MARK: - Settings Tab
-                NavigationView {
-                    Form {
-                        Section(header: Text("Navidrome Server").foregroundColor(hyloYellow)) {
-                            TextField("Server URL", text: $navidrome.serverURL)
-                                .keyboardType(.URL)
-                                .autocapitalization(.none)
-                                .disableAutocorrection(true)
-                            TextField("Username", text: $navidrome.username)
-                                .autocapitalization(.none)
-                            SecureField("Password", text: $navidrome.password)
+                
+                TabView {
+                    // 1. Library View
+                    LibraryView(playerViewModel: playerViewModel)
+                        .tabItem {
+                            Label("Library", systemImage: "music.note.list")
                         }
-
-                        Section(header: Text("About").foregroundColor(hyloYellow)) {
-                            HStack {
-                                Text("Version")
-                                Spacer()
-                                Text("1.0.0").foregroundColor(.gray)
-                            }
+                    
+                    // 2. Offline View
+                    OfflineView(playerViewModel: playerViewModel)
+                        .tabItem {
+                            Label("Offline", systemImage: "arrow.down.circle.fill")
                         }
-                    }
-                    .scrollContentBackground(.hidden)
-                    .background(Color.black.ignoresSafeArea())
-                    .navigationTitle("Settings")
                 }
-                .tabItem { Label("Settings", systemImage: "gearshape.fill") }
+                .accentColor(hyloYellow)
             }
-            .accentColor(hyloYellow)
-            .preferredColorScheme(.dark)
-
-            // MARK: - Mini Now Playing bar
-            if let song = playerVM.currentSong {
-                Button(action: { showNowPlaying = true }) {
-                    HStack(spacing: 14) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(song.title)
-                                .font(.subheadline).fontWeight(.semibold)
-                                .foregroundColor(.white)
-                                .lineLimit(1)
-                            Text(song.artist)
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                                .lineLimit(1)
-                        }
-                        Spacer()
-                        Button(action: { playerVM.togglePlayPause() }) {
-                            Image(systemName: playerVM.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.title3)
-                                .foregroundColor(hyloYellow)
-                        }
+            
+            // Persistent Mini-Player Overlay
+            if playerViewModel.currentSong != nil {
+                MiniPlayerView(playerViewModel: playerViewModel)
+                    .onTapGesture {
+                        showingNowPlaying = true
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(16)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 56) // clear tab bar
-                }
-                .buttonStyle(.plain)
-                .sheet(isPresented: $showNowPlaying) {
-                    NowPlayingView(playerViewModel: playerVM)
-                }
+                    .padding(.bottom, 49) // Offset to sit just above the TabBar
             }
         }
+        // Now Playing Modal Sheet
+        .sheet(isPresented: $showingNowPlaying) {
+            NowPlayingView(playerViewModel: playerViewModel)
+        }
+        .preferredColorScheme(.dark)
     }
 }
 
-// MARK: - Reusable Song Row
-
-struct SongRow: View {
-    let song: Song
-    @ObservedObject var playerVM: PlayerViewModel
-    @ObservedObject var offlineManager: OfflineManager
-
+// MARK: - Mini Player View Component
+struct MiniPlayerView: View {
+    @ObservedObject var playerViewModel: PlayerViewModel
+    let hyloYellow = Color(red: 0.98, green: 0.8, blue: 0.1)
+    
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(song.title)
+        HStack {
+            // Tiny artwork placeholder
+            RoundedRectangle(cornerRadius: 6)
+                .fill(hyloYellow.opacity(0.3))
+                .frame(width: 40, height: 40)
+                .overlay(Image(systemName: "music.note").foregroundColor(.white))
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(playerViewModel.currentSong?.title ?? "Unknown")
+                    .font(.subheadline)
+                    .fontWeight(.bold)
                     .foregroundColor(.white)
-                    .fontWeight(.semibold)
                     .lineLimit(1)
-                Text("\(song.artist) • \(song.album)")
-                    .foregroundColor(.gray)
+                Text(playerViewModel.currentSong?.artist ?? "Unknown")
                     .font(.caption)
+                    .foregroundColor(hyloYellow)
                     .lineLimit(1)
             }
+            
             Spacer()
-            Text(song.duration)
-                .foregroundColor(.gray)
-                .font(.caption2)
-                .monospacedDigit()
-
-            Button(action: {
-                offlineManager.downloadTrack(song: song) { _ in }
-            }) {
-                Image(systemName: offlineManager.isDownloaded(songID: song.id)
-                      ? "checkmark.circle.fill"
-                      : "arrow.down.circle")
-                    .foregroundColor(Color(red: 0.98, green: 0.8, blue: 0.1))
+            
+            // Like Button
+            Button(action: { playerViewModel.toggleLike() }) {
+                Image(systemName: playerViewModel.isLiked ? "heart.fill" : "heart")
+                    .foregroundColor(playerViewModel.isLiked ? hyloYellow : .white)
+                    .padding(.trailing, 8)
             }
-            .buttonStyle(.plain)
-
-            Button(action: { playerVM.play(song: song) }) {
-                Image(systemName: "play.fill")
-                    .foregroundColor(Color(red: 0.98, green: 0.8, blue: 0.1))
+            
+            // Play/Pause Button
+            Button(action: { playerViewModel.togglePlayPause() }) {
+                Image(systemName: playerViewModel.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.title2)
+                    .foregroundColor(.white)
             }
-            .buttonStyle(.plain)
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        // Glassmorphism background for the mini-player
+        .background(.ultraThinMaterial)
+        .overlay(
+            Rectangle().frame(height: 1).foregroundColor(Color.white.opacity(0.1)),
+            alignment: .top
+        )
     }
 }
