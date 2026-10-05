@@ -13,11 +13,10 @@ targets:
           - "project.yml"
           - "README.md"
           - "*.md"
+          - "Info.plist"
     info:
       path: Info.plist
     settings:
-      GENERATE_INFOPLIST_FILE: NO
-      INFOPLIST_FILE: Hylo/Info.plist
       CURRENT_PROJECT_VERSION: "1"
       MARKETING_VERSION: "1.0"
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
