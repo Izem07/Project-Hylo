@@ -30,7 +30,7 @@ jobs:
             -project Hylo.xcodeproj \
             -scheme Hylo \
             -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+            -destination 'generic/platform=iOS Simulator' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             SYMROOT=$(pwd)/build \
