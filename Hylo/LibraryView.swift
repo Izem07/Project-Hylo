@@ -18,7 +18,7 @@ struct LibraryView: View {
     enum LibraryTab { case albums, playlists }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 Color(red: 0.08, green: 0.08, blue: 0.08).ignoresSafeArea()
 
@@ -39,7 +39,7 @@ struct LibraryView: View {
                         }
                     }
                     .padding(.horizontal)
-                    .padding(.top, 20)
+                    .padding(.top, 8)
                     .padding(.bottom, 16)
 
                     // Segment picker
@@ -230,7 +230,7 @@ struct AlbumDetailView: View {
 
                     // Track list
                     ForEach(songs) { song in
-                        SongRow(song: song, playerViewModel: playerViewModel)
+                        SongRow(song: song, queue: songs, playerViewModel: playerViewModel)
                     }
                 }
                 .listStyle(.plain)
@@ -305,7 +305,7 @@ struct PlaylistDetailView: View {
                 Text("This playlist is empty.").foregroundColor(.gray)
             } else {
                 List(songs) { song in
-                    SongRow(song: song, playerViewModel: playerViewModel)
+                    SongRow(song: song, queue: songs, playerViewModel: playerViewModel)
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
@@ -326,11 +326,18 @@ struct PlaylistDetailView: View {
 
 struct SongRow: View {
     let song: Song
+    let queue: [Song]
     @ObservedObject var playerViewModel: PlayerViewModel
     @StateObject private var navidrome = NavidromeService.shared
     @StateObject private var offlineManager = OfflineManager.shared
 
     let hyloYellow = Color(red: 0.98, green: 0.8, blue: 0.1)
+
+    init(song: Song, queue: [Song] = [], playerViewModel: PlayerViewModel) {
+        self.song = song
+        self.queue = queue
+        self.playerViewModel = playerViewModel
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -368,7 +375,7 @@ struct SongRow: View {
             .buttonStyle(.plain)
 
             // Play
-            Button(action: { playerViewModel.play(song: song) }) {
+            Button(action: { playerViewModel.play(song: song, queue: queue.isEmpty ? [song] : queue) }) {
                 Image(systemName: "play.fill").foregroundColor(hyloYellow)
             }
             .accessibilityLabel("Play \(song.title)")

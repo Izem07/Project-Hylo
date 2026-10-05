@@ -8,7 +8,7 @@ struct OfflineView: View {
     let hyloYellow = Color(red: 0.98, green: 0.8, blue: 0.1)
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 Color(red: 0.08, green: 0.08, blue: 0.08).ignoresSafeArea()
 
@@ -37,7 +37,7 @@ struct OfflineView: View {
                         VStack(alignment: .leading) {
                             Text("Cached Tracks")
                                 .font(.subheadline).fontWeight(.semibold).foregroundColor(.white)
-                            Text("\(offlineManager.downloadedSongIDs.count) audio files on device")
+                            Text("\(offlineManager.downloadedSongs.count) audio files on device")
                                 .font(.caption2).foregroundColor(.gray)
                         }
                         Spacer()
@@ -49,8 +49,8 @@ struct OfflineView: View {
                     .cornerRadius(12)
                     .padding(.horizontal)
 
-                    // Track list — IDs only; no metadata stored locally
-                    if offlineManager.downloadedSongIDs.isEmpty {
+                    // Track list
+                    if offlineManager.downloadedSongs.isEmpty {
                         Spacer()
                         VStack(spacing: 12) {
                             Image(systemName: "music.note.slash")
@@ -66,50 +66,19 @@ struct OfflineView: View {
                         Spacer()
                     } else {
                         List {
-                            ForEach(Array(offlineManager.downloadedSongIDs).sorted(), id: \.self) { songID in
-                                HStack(spacing: 12) {
-                                    // No metadata stored — show ID and allow playback
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text("Track")
-                                            .font(.subheadline).fontWeight(.semibold)
-                                            .foregroundColor(.white)
-                                        Text(songID)
-                                            .font(.caption2).foregroundColor(.gray).lineLimit(1)
+                            ForEach(offlineManager.downloadedSongs) { song in
+                                SongRow(song: song, queue: offlineManager.downloadedSongs, playerViewModel: playerViewModel)
+                                    .swipeActions {
+                                        Button(role: .destructive) {
+                                            offlineManager.deleteDownload(songID: song.id)
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
                                     }
-
-                                    Spacer()
-
-                                    // Play from local file directly
-                                    Button(action: {
-                                        let localSong = Song(
-                                            id: songID,
-                                            title: "Cached Track",
-                                            artist: "Unknown",
-                                            album: "Offline",
-                                            duration: "--:--",
-                                            coverArtID: nil,
-                                            isLiked: false
-                                        )
-                                        playerViewModel.play(song: localSong)
-                                    }) {
-                                        Image(systemName: "play.fill").foregroundColor(hyloYellow)
-                                    }
-                                    .accessibilityLabel("Play cached track")
-                                    .buttonStyle(.plain)
-
-                                    Button(action: {
-                                        offlineManager.deleteDownload(songID: songID)
-                                    }) {
-                                        Image(systemName: "trash").foregroundColor(.red)
-                                    }
-                                    .accessibilityLabel("Delete offline track")
-                                    .buttonStyle(.plain)
-                                }
-                                .padding(.vertical, 4)
-                                .listRowBackground(Color.black)
                             }
                         }
                         .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
                     }
                 }
             }

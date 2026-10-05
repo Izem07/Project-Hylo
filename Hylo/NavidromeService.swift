@@ -174,6 +174,34 @@ class NavidromeService: ObservableObject {
         }.resume()
     }
 
+    // MARK: - Connection test
+
+    func testConnection(completion: @escaping (Bool, String?) -> Void) {
+        guard let url = URL(string: "\(baseURL)/rest/ping.view?\(authParameters)") else {
+            completion(false, "Invalid server URL."); return
+        }
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    completion(false, error.localizedDescription); return
+                }
+                guard let data = data,
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let root = json["subsonic-response"] as? [String: Any] else {
+                    completion(false, "Unexpected server response."); return
+                }
+                if let errorObj = root["error"] as? [String: Any],
+                   let code = errorObj["code"] as? Int, code == 40 || code == 41 {
+                    completion(false, "Authentication failed — check your credentials.")
+                } else if root["status"] as? String == "ok" {
+                    completion(true, nil)
+                } else {
+                    completion(false, "Server returned an error.")
+                }
+            }
+        }.resume()
+    }
+
     // MARK: - Helpers
 
     static func mapSong(_ s: SubsonicSong) -> Song {

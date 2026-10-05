@@ -1,13 +1,14 @@
 import Foundation
 
 /// Manages downloaded audio files.
-/// - Only the song ID list is persisted locally (UserDefaults).
-/// - Track metadata is NOT stored — it's always fetched live from the server.
+/// - Song IDs are persisted in UserDefaults.
+/// - Song metadata is stored as JSON sidecar files (.json) beside each .mp3.
 /// - The raw .mp3 files live in the app's Documents directory.
 class OfflineManager: ObservableObject {
     static let shared = OfflineManager()
 
     @Published var downloadedSongIDs: Set<String> = []
+    @Published var downloadedSongs: [Song] = []
 
     private let idsKey = "hylo_offline_ids"
 
@@ -23,6 +24,10 @@ class OfflineManager: ObservableObject {
 
     func localFileURL(for songID: String) -> URL {
         documentsDir.appendingPathComponent("\(songID).mp3")
+    }
+
+    func sidecarURL(for songID: String) -> URL {
+        documentsDir.appendingPathComponent("\(songID).json")
     }
 
     func isDownloaded(songID: String) -> Bool {
@@ -53,9 +58,15 @@ class OfflineManager: ObservableObject {
                     try FileManager.default.removeItem(at: destination)
                 }
                 try FileManager.default.moveItem(at: location, to: destination)
+
+                // Write sidecar JSON with song metadata
+                let sidecarData = try JSONEncoder().encode(song)
+                try sidecarData.write(to: self.sidecarURL(for: song.id))
+
                 DispatchQueue.main.async {
                     self.downloadedSongIDs.insert(song.id)
                     self.saveIDs()
+                    self.rebuildDownloadedSongs()
                     completion(true)
                 }
             } catch {
@@ -69,8 +80,21 @@ class OfflineManager: ObservableObject {
 
     func deleteDownload(songID: String) {
         try? FileManager.default.removeItem(at: localFileURL(for: songID))
+        try? FileManager.default.removeItem(at: sidecarURL(for: songID))
         downloadedSongIDs.remove(songID)
         saveIDs()
+        rebuildDownloadedSongs()
+    }
+
+    // MARK: - Rebuild metadata list
+
+    private func rebuildDownloadedSongs() {
+        downloadedSongs = downloadedSongIDs.compactMap { songID in
+            let url = sidecarURL(for: songID)
+            guard let data = try? Data(contentsOf: url),
+                  let song = try? JSONDecoder().decode(Song.self, from: data) else { return nil }
+            return song
+        }.sorted { $0.title < $1.title }
     }
 
     // MARK: - Persistence (IDs only)
@@ -85,5 +109,6 @@ class OfflineManager: ObservableObject {
         downloadedSongIDs = Set(stored.filter {
             FileManager.default.fileExists(atPath: localFileURL(for: $0).path)
         })
+        rebuildDownloadedSongs()
     }
 }

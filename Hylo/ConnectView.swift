@@ -157,27 +157,14 @@ struct ConnectView: View {
     private func testConnection() {
         isTestingConnection = true
         connectionResult = nil
-        // Ping the server with a lightweight ping.view call
-        let svc = NavidromeService.shared
-        guard let url = URL(string: "\(svc.baseURL)/rest/ping.view?u=\(svc.username)&v=1.16.1&c=Hylo&f=json") else {
-            connectionResult = .failure("Invalid server URL.")
-            isTestingConnection = false
-            return
-        }
-        URLSession.shared.dataTask(with: url) { data, response, error in
-            DispatchQueue.main.async {
-                isTestingConnection = false
-                if let error = error {
-                    connectionResult = .failure("Connection failed: \(error.localizedDescription)")
-                    return
-                }
-                guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                    connectionResult = .failure("Server returned an unexpected response.")
-                    return
-                }
-                connectionResult = .success
+        NavidromeService.shared.testConnection { success, message in
+            self.isTestingConnection = false
+            if success {
+                self.connectionResult = .success
+            } else {
+                self.connectionResult = .failure(message ?? "Connection failed.")
             }
-        }.resume()
+        }
     }
 
     // MARK: - Form field builder

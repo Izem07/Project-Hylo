@@ -36,3 +36,19 @@ Because this project uses `XcodeGen`, the `.xcodeproj` file is not tracked in ve
 
 ## License
 MIT License
+
+## Changelog
+
+### Pass 1 — Feature completion
+- **PlayerViewModel**: added `currentTime` and `duration` published properties; scrubber now tracks real elapsed/total time.
+- **PlayerViewModel**: added `seek(to:)` for user-initiated scrubbing.
+- **PlayerViewModel**: added `queue`, `queueIndex`, `skipForward()`, `skipBack()`; `play(song:queue:)` now accepts a queue; `nextTrackCommand` and `previousTrackCommand` wired to remote command center.
+- **PlayerViewModel**: lock screen now shows live elapsed time and duration via `MPNowPlayingInfoPropertyElapsedPlaybackTime`.
+- **NowPlayingView**: Slider is fully interactive (writes back via `seek(to:)`); time labels show real seconds; backward/forward buttons wired to `skipBack()`/`skipForward()`.
+- **NowPlayingView**: album art replaced with `AsyncImage` showing real cover art from Navidrome; gradient shown as fallback.
+- **LibraryView / SongRow**: `SongRow` now takes an optional `queue` parameter; `AlbumDetailView` and `PlaylistDetailView` pass the full songs array as queue so skip works across tracks.
+- **OfflineManager**: downloads now write a `.json` sidecar beside each `.mp3`; `downloadedSongs: [Song]` rebuilt from sidecar files at init and after each download/delete; delete also removes the sidecar.
+- **OfflineView**: offline track list now uses `SongRow` with real metadata from sidecar files, replacing the ID-only display.
+- **NavidromeService**: added `testConnection(completion:)` using Subsonic `ping.view` with proper auth and error-code handling.
+- **ConnectView**: connection test now delegates to `NavidromeService.shared.testConnection`; surfaces authentication errors distinctly.
+- **project.yml**: `Info.plist` confirmed in sources excludes list (no change required).
