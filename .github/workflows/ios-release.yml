@@ -1,0 +1,67 @@
+name: iOS Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release Hylo
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: Hylo
+        run: xcodegen generate
+
+      - name: Build App for iOS Device
+        working-directory: Hylo
+        run: |
+          xcodebuild clean build \
+            -project Hylo.xcodeproj \
+            -scheme Hylo \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            SYMROOT=$(pwd)/build
+
+      - name: Package IPA
+        working-directory: Hylo
+        run: |
+          mkdir -p build/Payload
+          cp -r build/Release-iphoneos/Hylo.app build/Payload/
+          cd build
+          zip -r Hylo-${{ github.ref_name }}.ipa Payload
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Hylo ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body: |
+            ## Hylo ${{ github.ref_name }}
+
+            ### Installation
+            This IPA is **unsigned**. To install it on a device you will need to re-sign it with your own certificate using a tool like [AltStore](https://altstore.io), [Sideloadly](https://sideloadly.io), or Xcode.
+
+            **Steps with Sideloadly:**
+            1. Download `Hylo-${{ github.ref_name }}.ipa`
+            2. Open Sideloadly and connect your iPhone
+            3. Drag the IPA in and sign with your Apple ID
+          files: |
+            Hylo/build/Hylo-${{ github.ref_name }}.ipa
