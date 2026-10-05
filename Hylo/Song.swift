@@ -6,5 +6,6 @@ struct Song: Identifiable, Codable, Hashable {
     let artist: String
     let album: String
     let duration: String
+    let coverArtID: String?
     var isLiked: Bool
 }

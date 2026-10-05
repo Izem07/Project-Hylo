@@ -1,45 +1,46 @@
 import Foundation
 
+/// Manages downloaded audio files.
+/// - Only the song ID list is persisted locally (UserDefaults).
+/// - Track metadata is NOT stored — it's always fetched live from the server.
+/// - The raw .mp3 files live in the app's Documents directory.
 class OfflineManager: ObservableObject {
     static let shared = OfflineManager()
 
-    @Published var downloadedSongs: [Song] = []
+    @Published var downloadedSongIDs: Set<String> = []
 
-    private let metadataKey = "hylo_offline_metadata"
+    private let idsKey = "hylo_offline_ids"
 
     init() {
-        loadMetadata()
+        loadIDs()
     }
 
-    // MARK: - File Paths
+    // MARK: - Paths
 
-    private var documentsDirectory: URL {
+    private var documentsDir: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 
     func localFileURL(for songID: String) -> URL {
-        documentsDirectory.appendingPathComponent("\(songID).mp3")
+        documentsDir.appendingPathComponent("\(songID).mp3")
     }
 
-    // MARK: - Status
-
     func isDownloaded(songID: String) -> Bool {
+        downloadedSongIDs.contains(songID) &&
         FileManager.default.fileExists(atPath: localFileURL(for: songID).path)
     }
 
     // MARK: - Download
 
-    func downloadTrack(song: Song, completion: @escaping (Bool) -> Void) {
+    func download(song: Song, completion: @escaping (Bool) -> Void) {
         guard let remoteURL = NavidromeService.shared.streamURL(for: song.id) else {
-            completion(false)
-            return
+            completion(false); return
         }
 
         let destination = localFileURL(for: song.id)
 
         if isDownloaded(songID: song.id) {
-            completion(true)
-            return
+            completion(true); return
         }
 
         URLSession.shared.downloadTask(with: remoteURL) { location, _, error in
@@ -47,22 +48,18 @@ class OfflineManager: ObservableObject {
                 DispatchQueue.main.async { completion(false) }
                 return
             }
-
             do {
                 if FileManager.default.fileExists(atPath: destination.path) {
                     try FileManager.default.removeItem(at: destination)
                 }
                 try FileManager.default.moveItem(at: location, to: destination)
-
                 DispatchQueue.main.async {
-                    if !self.downloadedSongs.contains(where: { $0.id == song.id }) {
-                        self.downloadedSongs.append(song)
-                        self.saveMetadata()
-                    }
+                    self.downloadedSongIDs.insert(song.id)
+                    self.saveIDs()
                     completion(true)
                 }
             } catch {
-                print("Offline save failed: \(error)")
+                print("Offline save error: \(error)")
                 DispatchQueue.main.async { completion(false) }
             }
         }.resume()
@@ -70,25 +67,23 @@ class OfflineManager: ObservableObject {
 
     // MARK: - Delete
 
-    func deleteOfflineTrack(songID: String) {
-        let fileURL = localFileURL(for: songID)
-        try? FileManager.default.removeItem(at: fileURL)
-        downloadedSongs.removeAll { $0.id == songID }
-        saveMetadata()
+    func deleteDownload(songID: String) {
+        try? FileManager.default.removeItem(at: localFileURL(for: songID))
+        downloadedSongIDs.remove(songID)
+        saveIDs()
     }
 
-    // MARK: - Persistence
+    // MARK: - Persistence (IDs only)
 
-    private func saveMetadata() {
-        if let encoded = try? JSONEncoder().encode(downloadedSongs) {
-            UserDefaults.standard.set(encoded, forKey: metadataKey)
-        }
+    private func saveIDs() {
+        UserDefaults.standard.set(Array(downloadedSongIDs), forKey: idsKey)
     }
 
-    private func loadMetadata() {
-        if let data = UserDefaults.standard.data(forKey: metadataKey),
-           let decoded = try? JSONDecoder().decode([Song].self, from: data) {
-            downloadedSongs = decoded
-        }
+    private func loadIDs() {
+        // Also validate that each stored ID still has a file on disk
+        let stored = UserDefaults.standard.stringArray(forKey: idsKey) ?? []
+        downloadedSongIDs = Set(stored.filter {
+            FileManager.default.fileExists(atPath: localFileURL(for: $0).path)
+        })
     }
 }

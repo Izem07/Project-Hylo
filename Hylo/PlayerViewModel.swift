@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import MediaPlayer
+import UIKit
 
 class PlayerViewModel: ObservableObject {
     @Published var currentSong: Song?
@@ -113,9 +114,24 @@ class PlayerViewModel: ObservableObject {
         var nowPlayingInfo = [String: Any]()
         nowPlayingInfo[MPMediaItemPropertyTitle] = song.title
         nowPlayingInfo[MPMediaItemPropertyArtist] = song.artist
-        
-        // This pushes metadata to the iOS Lock Screen
+        nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = song.album
+
+        // Push metadata to the iOS Lock Screen
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+
+        // Fetch and set cover art asynchronously
+        if let artURL = NavidromeService.shared.coverArtURL(for: song.coverArtID, size: 600) {
+            URLSession.shared.dataTask(with: artURL) { data, _, _ in
+                guard let data = data, let uiImage = UIImage(data: data) else { return }
+                let artwork = MPMediaItemArtwork(boundsSize: uiImage.size) { _ in uiImage }
+                DispatchQueue.main.async {
+                    if var info = MPNowPlayingInfoCenter.default().nowPlayingInfo {
+                        info[MPMediaItemPropertyArtwork] = artwork
+                        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+                    }
+                }
+            }.resume()
+        }
     }
     
     private func updatePlaybackState() {
