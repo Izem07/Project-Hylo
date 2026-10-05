@@ -1,0 +1,44 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Hylo (iOS Simulator)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: Hylo
+        run: xcodegen generate
+
+      - name: Build for iOS Simulator
+        working-directory: Hylo
+        run: |
+          xcodebuild \
+            -project Hylo.xcodeproj \
+            -scheme Hylo \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            SYMROOT=$(pwd)/build \
+            build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hylo-simulator-build
+          path: Hylo/build/Debug-iphonesimulator/Hylo.app
+          retention-days: 7
