@@ -1,15 +1,24 @@
-name: iOS Build
+name: iOS Build & Release
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [ main ]
+    branches: [ "main", "master" ]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release Version (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+        type: string
+
+permissions:
+  contents: write
 
 jobs:
   build:
-    name: Build Hylo (iOS Simulator)
+    name: Build & Release Hylo
     runs-on: macos-latest
 
     steps:
@@ -19,26 +28,54 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      - name: Generate Xcode project
+      - name: Generate Xcode Project
         working-directory: Hylo
         run: xcodegen generate
 
-      - name: Build for iOS Simulator
+      - name: Build App in Simulator
         working-directory: Hylo
         run: |
-          xcodebuild \
+          xcodebuild clean build \
             -project Hylo.xcodeproj \
             -scheme Hylo \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
-            -configuration Debug \
+            -configuration Release \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            SYMROOT=$(pwd)/build \
-            build
+            SYMROOT=$(pwd)/build
 
-      - name: Upload build artifact
+      - name: Zip Simulator App
+        working-directory: Hylo
+        run: |
+          cd build/Release-iphonesimulator
+          zip -r Hylo-Simulator.zip Hylo.app
+
+      - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Hylo-simulator-build
-          path: Hylo/build/Debug-iphonesimulator/Hylo.app
+          name: Hylo-Simulator-Build
+          path: Hylo/build/Release-iphonesimulator/Hylo-Simulator.zip
           retention-days: 7
+
+      - name: Create GitHub Release
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Hylo v${{ github.event.inputs.version }}
+          tag_name: v${{ github.event.inputs.version }}
+          draft: false
+          prerelease: false
+          body: |
+            ## Hylo v${{ github.event.inputs.version }}
+            
+            ### Simulator Build
+            This release includes a simulator `.app` bundle.
+            
+            **To run on a simulator:**
+            1. Unzip `Hylo-Simulator.zip`
+            2. Open Simulator.app on your Mac
+            3. Drag `Hylo.app` onto the simulator window
+          files: |
+            Hylo/build/Release-iphonesimulator/Hylo-Simulator.zip
