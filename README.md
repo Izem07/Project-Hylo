@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="Hylo.png" alt="Hylo Logo" width="120" />
+</p>
+
 # Hylo 🎵
 
 Hylo is a beautiful, custom iOS Navidrome client built with SwiftUI. It features seamless live streaming, local caching for offline playback, and a dedicated offline listening mode — all wrapped in a sleek dark theme with golden-yellow accents.
