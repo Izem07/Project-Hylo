@@ -16,6 +16,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Fix AppIcon (resize to 1024x1024)
+        run: |
+          sips -z 1024 1024 Hylo/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
+
       - name: Install XcodeGen
         run: brew install xcodegen
 

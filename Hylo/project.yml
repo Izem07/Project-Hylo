@@ -11,6 +11,8 @@ targets:
         excludes:
           - ".github"
           - "project.yml"
+          - "README.md"
+          - "*.md"
     settings:
       GENERATE_INFOPLIST_FILE: YES
       CURRENT_PROJECT_VERSION: "1"
