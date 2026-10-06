@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Hylo Demo (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "file": "${workspaceFolder}/demo/index.html"
+    },
+    {
+      "name": "Hylo Demo (Edge)",
+      "type": "msedge",
+      "request": "launch",
+      "file": "${workspaceFolder}/demo/index.html"
+    }
+  ]
+}
