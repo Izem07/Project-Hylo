@@ -38,39 +38,38 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   Future<void> _init() async {
-    // Configure audio session for playback (equivalent to AVAudioSession .playback)
-    if (!kIsWeb) {
-      final session = await AudioSession.instance;
-      await session.configure(const AudioSessionConfiguration.music());
+    try {
+      if (!kIsWeb) {
+        final session = await AudioSession.instance;
+        await session.configure(const AudioSessionConfiguration.music());
+      }
+
+      _player.positionStream.listen((position) {
+        _currentTime = position.inMilliseconds / 1000.0;
+        if (_duration > 0) {
+          _playbackProgress = (_currentTime / _duration).clamp(0.0, 1.0);
+        }
+        notifyListeners();
+      });
+
+      _player.durationStream.listen((dur) {
+        _duration = dur != null ? dur.inMilliseconds / 1000.0 : 0.0;
+        notifyListeners();
+      });
+
+      _player.playingStream.listen((playing) {
+        _isPlaying = playing;
+        notifyListeners();
+      });
+
+      _player.playerStateStream.listen((state) {
+        if (state.processingState == ProcessingState.completed) {
+          skipForward();
+        }
+      });
+    } catch (e) {
+      debugPrint('PlayerProvider._init error (non-fatal): $e');
     }
-
-    // Position stream — update progress every ~500ms
-    _player.positionStream.listen((position) {
-      _currentTime = position.inMilliseconds / 1000.0;
-      if (_duration > 0) {
-        _playbackProgress = (_currentTime / _duration).clamp(0.0, 1.0);
-      }
-      notifyListeners();
-    });
-
-    // Duration stream
-    _player.durationStream.listen((dur) {
-      _duration = dur?.inMilliseconds != null ? dur!.inMilliseconds / 1000.0 : 0.0;
-      notifyListeners();
-    });
-
-    // Playing state stream
-    _player.playingStream.listen((playing) {
-      _isPlaying = playing;
-      notifyListeners();
-    });
-
-    // Auto-advance when track ends
-    _player.playerStateStream.listen((state) {
-      if (state.processingState == ProcessingState.completed) {
-        skipForward();
-      }
-    });
   }
 
   // MARK: - Play
@@ -110,11 +109,14 @@ class PlayerProvider extends ChangeNotifier {
 
     try {
       final uri = Uri.parse(urlString);
-      // Use setUrl for http/https streams, setFilePath for local files
       if (uri.isScheme('http') || uri.isScheme('https')) {
         await _player.setUrl(urlString);
-      } else {
+      } else if (!kIsWeb) {
         await _player.setFilePath(urlString);
+      } else {
+        _playbackError = 'Local file playback not supported on web.';
+        notifyListeners();
+        return;
       }
       await _player.play();
     } catch (e) {

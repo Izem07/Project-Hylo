@@ -2,16 +2,28 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Hylo Demo (Chrome)",
-      "type": "chrome",
+      "name": "Hylo (Chrome)",
       "request": "launch",
-      "file": "${workspaceFolder}/demo/index.html"
+      "type": "dart",
+      "cwd": "${workspaceFolder}/hylo_flutter",
+      "program": "${workspaceFolder}/hylo_flutter/lib/main.dart",
+      "args": ["-d", "chrome", "--web-port=8080"]
     },
     {
-      "name": "Hylo Demo (Edge)",
-      "type": "msedge",
+      "name": "Hylo (iOS)",
       "request": "launch",
-      "file": "${workspaceFolder}/demo/index.html"
+      "type": "dart",
+      "cwd": "${workspaceFolder}/hylo_flutter",
+      "program": "${workspaceFolder}/hylo_flutter/lib/main.dart",
+      "args": ["-d", "ios"]
+    },
+    {
+      "name": "Hylo (Android)",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "${workspaceFolder}/hylo_flutter",
+      "program": "${workspaceFolder}/hylo_flutter/lib/main.dart",
+      "args": ["-d", "android"]
     }
   ]
 }

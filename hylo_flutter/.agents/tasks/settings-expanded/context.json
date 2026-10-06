@@ -1,0 +1,23 @@
+{
+  "project_type": "Flutter app — Navidrome music client, single-package",
+  "language": "Dart / Flutter 3.x",
+  "build_system": "Flutter toolchain; no separate compile step. pubspec.yaml at hylo_flutter/pubspec.yaml. All source under lib/.",
+  "test_framework": "No unit tests in the project. Verification = flutter analyze lib (must exit 0, no issues).",
+  "build_command": "flutter analyze lib",
+  "test_command": "flutter analyze lib",
+  "verification_instructions": "Run `flutter analyze lib` from the hylo_flutter directory. All passes must produce 'No issues found.' before committing.",
+  "snapshot_or_generated_files": null,
+  "environment_constraints": "Working directory for all flutter commands must be c:\\Users\\lionp\\OneDrive\\Documents\\Workspace\\Project-Hylo\\hylo_flutter. Branch is main. Do not push. Do not restart any dev server.",
+  "contribution_requirements": "No AGENTS.md or CONTRIBUTING.md found. Commit message must be: 'feat: expanded settings with playback, appearance, and download options'. All SharedPreferences keys prefixed hylo_settings_. No new packages — all deps already in pubspec.yaml.",
+  "key_patterns": "NavidromeService and OfflineManager use singleton+factory pattern (static _instance, factory constructor, NavidromeService._internal()). All providers registered via ChangeNotifierProvider.value in main.dart MultiProvider. Screens use context.watch<T>() for reactive reads and context.read<T>() for one-shot writes. Theme accent color is currently hardcoded as const Color(0xFFF9CC1B) in main.dart ThemeData and as static const _yellow in connect_screen.dart — both must become dynamic after SettingsProvider is wired. SegmentedButton<T> is available via Material 3 (flutter sdk). showDialog used for confirms.",
+  "relevant_files": [
+    "lib/main.dart",
+    "lib/screens/connect_screen.dart",
+    "lib/screens/library_screen.dart",
+    "lib/services/navidrome_service.dart",
+    "lib/services/offline_manager.dart",
+    "lib/providers/player_provider.dart",
+    "pubspec.yaml"
+  ],
+  "directory_structure": "hylo_flutter/lib/main.dart — app entry, MultiProvider, HyloApp theme, _RootShell tab scaffold. lib/providers/ — player_provider.dart (ChangeNotifier, just_audio). lib/screens/ — connect_screen.dart (settings/connect tab), library_screen.dart (albums+playlists grid/list), offline_screen.dart. lib/services/ — navidrome_service.dart (Subsonic API singleton), offline_manager.dart (download/delete singleton), network_monitor.dart. lib/widgets/ — mini_player.dart, album_cell.dart, song_row.dart, capsule_pill.dart. lib/models/ — api_models.dart, album.dart, playlist.dart, song.dart."
+}

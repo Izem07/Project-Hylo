@@ -1,0 +1,40 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Redesign connect_screen.dart into a full Settings screen with five sectioned cards: Server Connection (existing), Playback, Downloads, Appearance, About. Depends on FEAT-001 (SettingsProvider must exist and be registered).",
+  "status": "pending",
+  "steps": [
+    "Rewrite lib/screens/connect_screen.dart. Keep all existing state fields (_isTesting, _result), _testConnection(), _formField(), _textField(), and the _ConnectionResult sealed class at the bottom — do not remove or change any of that logic.",
+
+    "Replace the outer layout: remove the branding hero (Hylo title, tagline, CapsulePill row). Replace with a plain Scaffold(backgroundColor: Colors.black) containing a SafeArea > SingleChildScrollView(padding: EdgeInsets.symmetric(vertical: 16)) > Column with a 'Settings' page title (fontSize 28, bold, white, left-padded 16) and then the five section cards below it.",
+
+    "Section card helper: create a private _sectionCard({required String title, required List<Widget> children}) widget builder that wraps children in a Container with color Colors.white.withValues(alpha:0.04), borderRadius 20, padding 20, preceded by a section title Text in Color(0xFF888888) with fontSize 11, fontWeight bold, letterSpacing 0.5, left-padded 16, and with 8px gap between title and card, 24px gap between cards.",
+
+    "Server Connection section: title 'SERVER CONNECTION'. Body = exact same widgets from the existing connect form card: Server URL _formField + _textField, Allow Insecure HTTP toggle container, Username _formField + _textField, Password _formField + _textField, connection result banner (conditional), Connect button. Replace hardcoded Color(0xFFF9CC1B) / _yellow references in this section with Theme.of(context).colorScheme.primary.",
+
+    "Playback section: title 'PLAYBACK'. Three rows inside the card: (1) Stream Quality label + SegmentedButton<String> with three ButtonSegment entries: value 'high' label 'High', value 'medium' label 'Medium', value 'low' label 'Low'. Selected set = {settings.streamQuality}, onSelectionChanged writes settings.streamQuality = newSet.first. (2) Skip Silence row with label text + Switch(value: settings.skipSilence, onChanged: (v) => settings.skipSilence = v, activeThumbColor: accent, activeTrackColor: accent.withValues(alpha:0.5)). (3) Crossfade row: label 'Crossfade' + value label ('Off' when 0, else '${v}s') on the right, then a Slider(min:0, max:10, divisions:10, value: settings.crossfadeDuration.toDouble(), onChanged: (v) => settings.crossfadeDuration = v.round(), activeColor: accent). Use accent = Theme.of(context).colorScheme.primary throughout.",
+
+    "Downloads section: title 'DOWNLOADS'. Three rows: (1) Download on Wi-Fi Only: label + Switch(value: settings.downloadOnWifiOnly, onChanged writes settings.downloadOnWifiOnly, activeThumbColor/activeTrackColor use accent). (2) Storage Used: Row with 'Storage Used' label and right-aligned Text('${offlineManager.downloadedSongs.length} files cached', color: Color(0xFF888888)). offlineManager = context.watch<OfflineManager>(). (3) Clear All Downloads: Center(child: TextButton(onPressed: _confirmClearAll, child: Text('Clear All Downloads', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)))). Implement _confirmClearAll(): calls showDialog with an AlertDialog asking 'Clear all downloads?' with Cancel + Confirm (red) actions; on confirm iterates a snapshot of offlineManager.downloadedSongIds and calls offlineManager.deleteDownload(id) for each.",
+
+    "Appearance section: title 'APPEARANCE'. Three rows: (1) Accent Color label above a Row of 5 GestureDetector-wrapped color circles. Each circle is a Container(width:40, height:40, decoration: BoxDecoration(color: theColor, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: settings.accentColor == theColor.value ? 2.5 : 0))). Colors list: [Color(0xFFF9CC1B), Color(0xFF3B82F6), Color(0xFF8B5CF6), Color(0xFF10B981), Color(0xFFEF4444)]. Tapping writes context.read<SettingsProvider>().accentColor = theColor.value. Space circles with SizedBox(width:12). (2) Album Grid: Row label + SegmentedButton<int> with ButtonSegment(value:2, label:Text('2 Columns')) and ButtonSegment(value:3, label:Text('3 Columns')). Selected = {settings.albumGridColumns}, onSelectionChanged writes settings.albumGridColumns = newSet.first. (3) Show Artist in Track Rows: Row label + Switch(value: settings.showAlbumArtistInRow, onChanged writes settings.showAlbumArtistInRow, activeThumbColor/activeTrackColor use accent).",
+
+    "About section: title 'ABOUT'. Two rows in the card: (1) Row with 'Version' label and right-aligned Text('Hylo v1.0.0', color: Color(0xFF888888)). (2) Text('Your music server, built for the drive.', style: TextStyle(color: Color(0xFF555555), fontSize: 12), centered or left-aligned).",
+
+    "At the top of build(), declare: final settings = context.watch<SettingsProvider>(); final navidrome = context.watch<NavidromeService>(); final offlineManager = context.watch<OfflineManager>(); final accent = Theme.of(context).colorScheme.primary; — remove the static const _yellow field entirely. Update all Switch activeThumbColor/activeTrackColor and button backgroundColor references to use accent/accent.withValues(alpha:...). Add imports for SettingsProvider and OfflineManager."
+  ],
+  "acceptance_criteria": [
+    "Settings screen renders five clearly labelled sections: Server Connection, Playback, Downloads, Appearance, About.",
+    "All existing connect functionality (fields, toggle, button disabled guard, test connection, result banner) still works exactly as before.",
+    "Tapping an accent color circle immediately re-themes the whole app (bottom nav, slider, button).",
+    "SegmentedButton for Stream Quality reads and writes SettingsProvider.streamQuality.",
+    "SegmentedButton for Album Grid reads and writes SettingsProvider.albumGridColumns.",
+    "Clear All Downloads shows a confirm dialog and deletes all downloaded files on confirm.",
+    "Storage Used row reflects live downloadedSongs count.",
+    "flutter analyze lib returns no issues."
+  ],
+  "verification": [
+    "cd c:\\Users\\lionp\\OneDrive\\Documents\\Workspace\\Project-Hylo\\hylo_flutter && flutter analyze lib"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

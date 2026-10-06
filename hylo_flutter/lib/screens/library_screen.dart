@@ -19,49 +19,96 @@ class LibraryScreen extends StatefulWidget {
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends State<LibraryScreen> {
+class _LibraryScreenState extends State<LibraryScreen>
+    with SingleTickerProviderStateMixin {
   List<Album> _albums = [];
   List<Playlist> _playlists = [];
   bool _isLoading = false;
   int _selectedTab = 0; // 0 = Albums, 1 = Playlists
+  String _lastServerURL = ''; // track credential changes
+
+  // Pulsing dot animation
+  late AnimationController _dotController;
+  late Animation<double> _dotOpacity;
 
   static const _yellow = Color(0xFFF9CC1B);
 
   @override
   void initState() {
     super.initState();
-    _loadContent();
+    _dotController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat(reverse: true);
+    _dotOpacity = Tween<double>(begin: 1.0, end: 0.4).animate(_dotController);
+
+    // Delay so providers are available in context
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadContent());
+  }
+
+  @override
+  void dispose() {
+    _dotController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload whenever the server URL changes (e.g. after connecting in Settings)
+    final navidrome = context.read<NavidromeService>();
+    if (navidrome.serverURL != _lastServerURL) {
+      _lastServerURL = navidrome.serverURL;
+      _loadContent();
+    }
   }
 
   Future<void> _loadContent() async {
-    final monitor = NetworkMonitor();
+    final navidrome = context.read<NavidromeService>();
+    final monitor = context.read<NetworkMonitor>();
+
+    if (navidrome.serverURL.trim().isEmpty ||
+        navidrome.username.trim().isEmpty) {
+      return;
+    }
     if (!monitor.isConnected) return;
 
     setState(() => _isLoading = true);
-    final navidrome = NavidromeService();
 
     if (_selectedTab == 0) {
       final albums = await navidrome.fetchAlbums();
-      if (mounted) setState(() { _albums = albums; _isLoading = false; });
+      if (mounted) {
+        setState(() {
+          _albums = albums;
+          _isLoading = false;
+        });
+      }
     } else {
       final playlists = await navidrome.fetchPlaylists();
-      if (mounted) setState(() { _playlists = playlists; _isLoading = false; });
+      if (mounted) {
+        setState(() {
+          _playlists = playlists;
+          _isLoading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final monitor = context.watch<NetworkMonitor>();
+    context.watch<
+        NavidromeService>(); // trigger didChangeDependencies on credential changes
 
     return Scaffold(
-      backgroundColor: const Color(0xFF141414),
+      backgroundColor: const Color(0xFF0A0A0A),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -69,22 +116,31 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     'Library',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 28,
+                      fontSize: 32,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          color: monitor.isConnected
-                              ? Colors.green
-                              : Colors.red,
-                          shape: BoxShape.circle,
-                        ),
+                      AnimatedBuilder(
+                        animation: _dotOpacity,
+                        builder: (context, child) {
+                          return Opacity(
+                            opacity:
+                                monitor.isConnected ? _dotOpacity.value : 1.0,
+                            child: Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                color: monitor.isConnected
+                                    ? Colors.green
+                                    : Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(width: 6),
                       Text(
@@ -100,15 +156,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ),
             ),
 
-            // Segment picker
+            // Segment picker — animated pill
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  _tabButton('Albums', 0),
-                  const SizedBox(width: 4),
-                  _tabButton('Playlists', 1),
-                ],
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _SegmentControl(
+                selectedTab: _selectedTab,
+                onTabChanged: (i) {
+                  setState(() => _selectedTab = i);
+                  _loadContent();
+                },
               ),
             ),
             const SizedBox(height: 12),
@@ -128,50 +184,32 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  Widget _tabButton(String label, int index) {
-    final selected = _selectedTab == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() => _selectedTab = index);
-          _loadContent();
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          margin: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
-            color: selected ? _yellow : Colors.white.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.black : Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _albumGrid() {
+    final navidrome = context.read<NavidromeService>();
+    final notConfigured =
+        navidrome.serverURL.trim().isEmpty || navidrome.username.trim().isEmpty;
+
+    if (notConfigured) {
+      return _emptyState(
+        icon: Icons.settings_outlined,
+        message:
+            'Enter your server URL, username, and password in Settings, then tap Connect.',
+      );
+    }
     if (_albums.isEmpty) {
       return _emptyState(
         icon: Icons.library_music,
         message:
-            'No albums found.\nMake sure your server URL and credentials are set in Settings.',
+            'No albums found.\nMake sure your server is reachable and credentials are correct.',
       );
     }
     return GridView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
-        childAspectRatio: 0.75,
+        childAspectRatio: 0.78,
       ),
       itemCount: _albums.length,
       itemBuilder: (context, i) {
@@ -197,7 +235,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       );
     }
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       itemCount: _playlists.length,
       itemBuilder: (context, i) {
         final playlist = _playlists[i];
@@ -218,20 +256,98 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: const Color(0xFF888888), size: 44),
-            const SizedBox(height: 14),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  color: Color(0xFF888888), fontSize: 14),
-            ),
-          ],
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A1A),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: const Color(0xFF888888), size: 52),
+              const SizedBox(height: 14),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF888888), fontSize: 14),
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+// MARK: - Animated segment control
+
+class _SegmentControl extends StatelessWidget {
+  final int selectedTab;
+  final ValueChanged<int> onTabChanged;
+
+  const _SegmentControl({
+    required this.selectedTab,
+    required this.onTabChanged,
+  });
+
+  static const _labels = ['Albums', 'Playlists'];
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final pillWidth = constraints.maxWidth / 2;
+        return Container(
+          height: 40,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A1A),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Stack(
+            children: [
+              // Sliding yellow indicator
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                left: selectedTab * pillWidth,
+                top: 3,
+                bottom: 3,
+                width: pillWidth - 3,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF9CC1B),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                ),
+              ),
+              // Labels on top
+              Row(
+                children: List.generate(_labels.length, (i) {
+                  final selected = i == selectedTab;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => onTabChanged(i),
+                      behavior: HitTestBehavior.opaque,
+                      child: Center(
+                        child: Text(
+                          _labels[i],
+                          style: TextStyle(
+                            color: selected ? Colors.black : Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -244,20 +360,19 @@ class _PlaylistRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final artUrl =
-        NavidromeService().coverArtUrl(playlist.coverArt, size: 80);
+    final artUrl = NavidromeService().coverArtUrl(playlist.coverArt, size: 80);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             child: artUrl != null
                 ? CachedNetworkImage(
                     imageUrl: artUrl,
-                    width: 52,
-                    height: 52,
+                    width: 60,
+                    height: 60,
                     fit: BoxFit.cover,
                     placeholder: (_, __) => _thumbPlaceholder(),
                     errorWidget: (_, __, ___) => _thumbPlaceholder(),
@@ -273,22 +388,21 @@ class _PlaylistRow extends StatelessWidget {
                   playlist.name,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   '${playlist.songCount} songs',
-                  style: const TextStyle(
-                      color: Color(0xFF888888), fontSize: 12),
+                  style:
+                      const TextStyle(color: Color(0xFF999999), fontSize: 12),
                 ),
               ],
             ),
           ),
-          const Icon(Icons.chevron_right,
-              color: Color(0xFF888888), size: 16),
+          const Icon(Icons.chevron_right, color: Color(0xFF888888), size: 16),
         ],
       ),
     );
@@ -296,11 +410,10 @@ class _PlaylistRow extends StatelessWidget {
 
   Widget _thumbPlaceholder() {
     return Container(
-      width: 52,
-      height: 52,
+      width: 60,
+      height: 60,
       color: Colors.white.withValues(alpha: 0.08),
-      child: const Icon(Icons.queue_music,
-          color: Color(0xFF888888), size: 22),
+      child: const Icon(Icons.queue_music, color: Color(0xFF888888), size: 22),
     );
   }
 }
@@ -325,7 +438,12 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
   void initState() {
     super.initState();
     NavidromeService().fetchTracks(widget.album.id).then((songs) {
-      if (mounted) setState(() { _songs = songs; _isLoading = false; });
+      if (mounted) {
+        setState(() {
+          _songs = songs;
+          _isLoading = false;
+        });
+      }
     });
   }
 
@@ -335,17 +453,16 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
         NavidromeService().coverArtUrl(widget.album.coverArt, size: 120);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF141414),
+      backgroundColor: const Color(0xFF0A0A0A),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF141414),
+        backgroundColor: const Color(0xFF0A0A0A),
         foregroundColor: Colors.white,
         title: Text(widget.album.name,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: _yellow))
+          ? const Center(child: CircularProgressIndicator(color: _yellow))
           : ListView(
               children: [
                 // Album header
@@ -397,7 +514,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                     ],
                   ),
                 ),
-                const Divider(color: Color(0xFF252525), height: 1),
+                const Divider(color: Color(0xFF2A2A2A), height: 1),
                 // Track list
                 ..._songs.map(
                   (s) => Padding(
@@ -416,8 +533,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
       width: 80,
       height: 80,
       color: Colors.white.withValues(alpha: 0.1),
-      child: const Icon(Icons.music_note,
-          color: Color(0xFF888888), size: 32),
+      child: const Icon(Icons.music_note, color: Color(0xFF888888), size: 32),
     );
   }
 }
@@ -441,28 +557,29 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   @override
   void initState() {
     super.initState();
-    NavidromeService()
-        .fetchPlaylistTracks(widget.playlist.id)
-        .then((songs) {
-      if (mounted) setState(() { _songs = songs; _isLoading = false; });
+    NavidromeService().fetchPlaylistTracks(widget.playlist.id).then((songs) {
+      if (mounted) {
+        setState(() {
+          _songs = songs;
+          _isLoading = false;
+        });
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF141414),
+      backgroundColor: const Color(0xFF0A0A0A),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF141414),
+        backgroundColor: const Color(0xFF0A0A0A),
         foregroundColor: Colors.white,
         title: Text(widget.playlist.name,
-            style: const TextStyle(
-                fontSize: 16, fontWeight: FontWeight.bold)),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: _yellow))
+          ? const Center(child: CircularProgressIndicator(color: _yellow))
           : _songs.isEmpty
               ? const Center(
                   child: Text('This playlist is empty.',

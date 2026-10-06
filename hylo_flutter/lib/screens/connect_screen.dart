@@ -211,13 +211,14 @@ class _ConnectScreenState extends State<ConnectScreen> {
                         const SizedBox(height: 16),
                       ],
 
-                      // Connect button
+                      // Connect button — only enabled when all three fields are filled
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: _isTesting ||
-                                  navidrome.serverURL.isEmpty ||
-                                  navidrome.username.isEmpty
+                                  navidrome.serverURL.trim().isEmpty ||
+                                  navidrome.username.trim().isEmpty ||
+                                  navidrome.password.trim().isEmpty
                               ? null
                               : _testConnection,
                           style: ElevatedButton.styleFrom(

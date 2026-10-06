@@ -1,0 +1,7 @@
+{
+  "task_id": "task-settings-expanded",
+  "task_description": "Expand the Hylo Flutter Settings screen with SettingsProvider (7 prefs in SharedPreferences), redesigned Settings UI with Server/Playback/Downloads/Appearance/About sections, dynamic accent color wired through app theme, stream quality wired to NavidromeService.streamUrl(), and album grid columns wired to LibraryScreen.",
+  "status": "pending",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}

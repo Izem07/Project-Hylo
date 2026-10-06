@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Create SettingsProvider and wire it into main.dart, NavidromeService, and LibraryScreen. This covers all the plumbing before the UI redesign so FEAT-002 can safely read/write settings.",
+  "status": "pending",
+  "steps": [
+    "Create lib/providers/settings_provider.dart as a ChangeNotifier singleton (same pattern as NavidromeService: static _instance, factory constructor, _internal() named constructor). Declare seven fields with defaults: accentColor int = 0xFFF9CC1B, streamQuality String = 'high', skipSilence bool = false, crossfadeDuration int = 0, downloadOnWifiOnly bool = true, albumGridColumns int = 2, showAlbumArtistInRow bool = true. Provide an async init() that reads from SharedPreferences using keys: hylo_settings_accentColor, hylo_settings_streamQuality, hylo_settings_skipSilence, hylo_settings_crossfadeDuration, hylo_settings_downloadOnWifiOnly, hylo_settings_albumGridColumns, hylo_settings_showAlbumArtistInRow. Each setter writes back to SharedPreferences and calls notifyListeners().",
+
+    "Modify lib/main.dart: import SettingsProvider. In main(), add: final settings = SettingsProvider(); await settings.init(); Add ChangeNotifierProvider<SettingsProvider>.value(value: settings) to the MultiProvider list. Wrap HyloApp's build() in Consumer<SettingsProvider>: inside the consumer, build the MaterialApp with ThemeData that uses Color(settings.accentColor) for colorScheme primary, bottomNavigationBarTheme selectedItemColor, and sliderTheme activeTrackColor + thumbColor. Remove the const qualifiers that hardcode 0xFFF9CC1B in those three spots — make the Color dynamic from settings.accentColor.",
+
+    "Modify lib/services/navidrome_service.dart: in streamUrl(String songId), after building the base URL, read SettingsProvider().streamQuality and map it: 'high' -> 320, 'medium' -> 192, 'low' -> 128 (default 320 for unknown values). Append &maxBitRate=<value> before returning the URL. Add the import for SettingsProvider at the top.",
+
+    "Modify lib/screens/library_screen.dart: import SettingsProvider from '../providers/settings_provider.dart'. In _albumGrid(), replace the hardcoded crossAxisCount: 2 with context.watch<SettingsProvider>().albumGridColumns."
+  ],
+  "acceptance_criteria": [
+    "lib/providers/settings_provider.dart exists with all 7 preference fields, init(), and setters that persist to SharedPreferences with hylo_settings_ prefix.",
+    "main.dart MultiProvider includes SettingsProvider and HyloApp builds its theme from settings.accentColor dynamically.",
+    "NavidromeService.streamUrl() appends &maxBitRate=320/192/128 based on SettingsProvider().streamQuality.",
+    "LibraryScreen._albumGrid() uses context.watch<SettingsProvider>().albumGridColumns as crossAxisCount.",
+    "flutter analyze lib returns no issues."
+  ],
+  "verification": [
+    "cd c:\\Users\\lionp\\OneDrive\\Documents\\Workspace\\Project-Hylo\\hylo_flutter && flutter analyze lib"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

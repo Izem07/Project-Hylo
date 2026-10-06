@@ -9,15 +9,15 @@ class NowPlayingScreen extends StatelessWidget {
   const NowPlayingScreen({super.key});
 
   static const _yellow = Color(0xFFF9CC1B);
-  static const _bg = Color(0xFF141414);
+  static const _bg = Color(0xFF0A0A0A);
 
   @override
   Widget build(BuildContext context) {
     return Consumer<PlayerProvider>(
       builder: (context, player, _) {
         final song = player.currentSong;
-        final artUrl = NavidromeService()
-            .coverArtUrl(song?.coverArtId, size: 600);
+        final artUrl =
+            NavidromeService().coverArtUrl(song?.coverArtId, size: 600);
 
         return Container(
           color: _bg,
@@ -82,17 +82,29 @@ class NowPlayingScreen extends StatelessWidget {
                       children: [
                         AspectRatio(
                           aspectRatio: 1,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: artUrl != null
-                                ? CachedNetworkImage(
-                                    imageUrl: artUrl,
-                                    fit: BoxFit.cover,
-                                    placeholder: (_, __) => _artPlaceholder(),
-                                    errorWidget: (_, __, ___) =>
-                                        _artPlaceholder(),
-                                  )
-                                : _artPlaceholder(),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.6),
+                                  blurRadius: 40,
+                                  offset: const Offset(0, 20),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(20),
+                              child: artUrl != null
+                                  ? CachedNetworkImage(
+                                      imageUrl: artUrl,
+                                      fit: BoxFit.cover,
+                                      placeholder: (_, __) => _artPlaceholder(),
+                                      errorWidget: (_, __, ___) =>
+                                          _artPlaceholder(),
+                                    )
+                                  : _artPlaceholder(),
+                            ),
                           ),
                         ),
                         // Show Lyrics badge overlay
@@ -143,7 +155,7 @@ class NowPlayingScreen extends StatelessWidget {
                                 song?.title ?? 'Unknown Title',
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 20,
+                                  fontSize: 22,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -152,33 +164,24 @@ class NowPlayingScreen extends StatelessWidget {
                                 song?.artist ?? 'Unknown Artist',
                                 style: const TextStyle(
                                   color: _yellow,
-                                  fontSize: 14,
+                                  fontSize: 15,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               Text(
                                 song?.album ?? 'Unknown Album',
                                 style: const TextStyle(
-                                  color: Color(0xFF888888),
-                                  fontSize: 14,
+                                  color: Color(0xFF999999),
+                                  fontSize: 13,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        // Heart / Like button
-                        Semantics(
-                          label: player.isLiked ? 'Unlike' : 'Like',
-                          child: IconButton(
-                            icon: Icon(
-                              player.isLiked
-                                  ? Icons.favorite
-                                  : Icons.favorite_border,
-                              color: player.isLiked ? _yellow : Colors.white,
-                              size: 24,
-                            ),
-                            onPressed: () => player.toggleLike(),
-                          ),
+                        // Animated Like button
+                        _AnimatedLikeButton(
+                          isLiked: player.isLiked,
+                          onTap: () => player.toggleLike(),
                         ),
                       ],
                     ),
@@ -186,50 +189,10 @@ class NowPlayingScreen extends StatelessWidget {
 
                   const SizedBox(height: 16),
 
-                  // MARK: Scrubber
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
-                      children: [
-                        SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            activeTrackColor: _yellow,
-                            inactiveTrackColor:
-                                Colors.white.withValues(alpha: 0.2),
-                            thumbColor: _yellow,
-                            overlayColor: _yellow.withValues(alpha: 0.2),
-                            thumbShape: const RoundSliderThumbShape(
-                                enabledThumbRadius: 6),
-                            trackHeight: 3,
-                          ),
-                          child: Slider(
-                            value: player.playbackProgress.clamp(0.0, 1.0),
-                            onChanged: (v) => player.seek(v),
-                          ),
-                        ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              _formatSeconds(player.currentTime),
-                              style: const TextStyle(
-                                color: Color(0xFF888888),
-                                fontSize: 11,
-                                fontFeatures: [FontFeature.tabularFigures()],
-                              ),
-                            ),
-                            Text(
-                              _formatSeconds(player.duration),
-                              style: const TextStyle(
-                                color: Color(0xFF888888),
-                                fontSize: 11,
-                                fontFeatures: [FontFeature.tabularFigures()],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                  // MARK: Scrubber (isolated subtree)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 24),
+                    child: _ScrubberWidget(),
                   ),
 
                   const SizedBox(height: 8),
@@ -241,8 +204,11 @@ class NowPlayingScreen extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         // Repeat (stub)
-                        const Icon(Icons.repeat,
-                            color: Color(0xFF888888), size: 22),
+                        Icon(
+                          Icons.repeat,
+                          color: const Color(0xFF888888).withValues(alpha: 0.6),
+                          size: 22,
+                        ),
                         // Skip back
                         Semantics(
                           label: 'Previous track',
@@ -284,8 +250,11 @@ class NowPlayingScreen extends StatelessWidget {
                           ),
                         ),
                         // Shuffle (stub)
-                        const Icon(Icons.shuffle,
-                            color: Color(0xFF888888), size: 22),
+                        Icon(
+                          Icons.shuffle,
+                          color: const Color(0xFF888888).withValues(alpha: 0.6),
+                          size: 22,
+                        ),
                       ],
                     ),
                   ),
@@ -311,7 +280,7 @@ class NowPlayingScreen extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.1),
+                            color: const Color(0xFF1A1A1A),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
@@ -347,16 +316,79 @@ class NowPlayingScreen extends StatelessWidget {
         gradient: LinearGradient(
           colors: [
             Colors.grey.withValues(alpha: 0.3),
-            Colors.black.withValues(alpha: 0.3)
+            Colors.black.withValues(alpha: 0.3),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: const Center(
         child: Icon(Icons.music_note, color: Color(0xFF888888), size: 64),
       ),
+    );
+  }
+}
+
+// MARK: - Scrubber (isolated rebuild subtree)
+
+class _ScrubberWidget extends StatefulWidget {
+  const _ScrubberWidget();
+
+  @override
+  State<_ScrubberWidget> createState() => _ScrubberWidgetState();
+}
+
+class _ScrubberWidgetState extends State<_ScrubberWidget> {
+  static const _yellow = Color(0xFFF9CC1B);
+  bool _dragging = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final player = context.watch<PlayerProvider>();
+
+    return Column(
+      children: [
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: _yellow,
+            inactiveTrackColor: Colors.white.withValues(alpha: 0.2),
+            thumbColor: _yellow,
+            overlayColor: _yellow.withValues(alpha: 0.2),
+            thumbShape: RoundSliderThumbShape(
+              enabledThumbRadius: _dragging ? 6 : 0,
+            ),
+            trackHeight: 3,
+          ),
+          child: Slider(
+            value: player.playbackProgress.clamp(0.0, 1.0),
+            onChangeStart: (_) => setState(() => _dragging = true),
+            onChangeEnd: (_) => setState(() => _dragging = false),
+            onChanged: (v) => player.seek(v),
+          ),
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              _formatSeconds(player.currentTime),
+              style: const TextStyle(
+                color: Color(0xFF888888),
+                fontSize: 11,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+            Text(
+              _formatSeconds(player.duration),
+              style: const TextStyle(
+                color: Color(0xFF888888),
+                fontSize: 11,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -364,5 +396,57 @@ class NowPlayingScreen extends StatelessWidget {
     if (!s.isFinite || s <= 0) return '0:00';
     final t = s.toInt();
     return '${t ~/ 60}:${(t % 60).toString().padLeft(2, '0')}';
+  }
+}
+
+// MARK: - Animated like button
+
+class _AnimatedLikeButton extends StatefulWidget {
+  final bool isLiked;
+  final VoidCallback onTap;
+
+  const _AnimatedLikeButton({
+    required this.isLiked,
+    required this.onTap,
+  });
+
+  @override
+  State<_AnimatedLikeButton> createState() => _AnimatedLikeButtonState();
+}
+
+class _AnimatedLikeButtonState extends State<_AnimatedLikeButton> {
+  double _scale = 1.0;
+
+  static const _yellow = Color(0xFFF9CC1B);
+
+  Future<void> _animate() async {
+    setState(() => _scale = 1.3);
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    if (mounted) setState(() => _scale = 1.0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: widget.isLiked ? 'Unlike' : 'Like',
+      child: GestureDetector(
+        onTap: () {
+          _animate();
+          widget.onTap();
+        },
+        child: AnimatedScale(
+          scale: _scale,
+          duration: const Duration(milliseconds: 150),
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Icon(
+              widget.isLiked ? Icons.favorite : Icons.favorite_border,
+              color: widget.isLiked ? _yellow : Colors.white,
+              size: 24,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
