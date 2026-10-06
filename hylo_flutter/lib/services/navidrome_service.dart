@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/api_models.dart';
+import '../providers/settings_provider.dart';
 
 class NavidromeService extends ChangeNotifier {
   static final NavidromeService _instance = NavidromeService._internal();
@@ -68,11 +69,9 @@ class NavidromeService extends ChangeNotifier {
 
   /// Generate a fresh salt + MD5 token on every call (Subsonic auth spec).
   String get _authParams {
-    final salt =
-        const Uuid().v4().replaceAll('-', '').substring(0, 12);
+    final salt = const Uuid().v4().replaceAll('-', '').substring(0, 12);
     final tokenInput = _password + salt;
-    final token =
-        md5.convert(utf8.encode(tokenInput)).toString();
+    final token = md5.convert(utf8.encode(tokenInput)).toString();
     return 'u=$_username&t=$token&s=$salt&v=1.16.1&c=Hylo&f=json';
   }
 
@@ -90,7 +89,13 @@ class NavidromeService extends ChangeNotifier {
 
   String? streamUrl(String songId) {
     if (baseURL.isEmpty) return null;
-    return '$baseURL/rest/stream.view?id=$songId&$_authParams';
+    final quality = SettingsProvider().streamQuality;
+    final bitRate = quality == 'medium'
+        ? 192
+        : quality == 'low'
+            ? 128
+            : 320;
+    return '$baseURL/rest/stream.view?id=$songId&$_authParams&maxBitRate=$bitRate';
   }
 
   String? coverArtUrl(String? coverId, {int size = 300}) {
@@ -126,8 +131,8 @@ class NavidromeService extends ChangeNotifier {
   Future<List<Song>> fetchTracks(String albumId) async {
     if (baseURL.isEmpty) return [];
     try {
-      final uri = Uri.parse(
-          '$baseURL/rest/getAlbum.view?id=$albumId&$_authParams');
+      final uri =
+          Uri.parse('$baseURL/rest/getAlbum.view?id=$albumId&$_authParams');
       final response = await http.get(uri);
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -149,8 +154,7 @@ class NavidromeService extends ChangeNotifier {
   Future<List<Playlist>> fetchPlaylists() async {
     if (baseURL.isEmpty) return [];
     try {
-      final uri =
-          Uri.parse('$baseURL/rest/getPlaylists.view?$_authParams');
+      final uri = Uri.parse('$baseURL/rest/getPlaylists.view?$_authParams');
       final response = await http.get(uri);
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -196,8 +200,8 @@ class NavidromeService extends ChangeNotifier {
     if (baseURL.isEmpty || query.isEmpty) return [];
     try {
       final encoded = Uri.encodeQueryComponent(query);
-      final uri = Uri.parse(
-          '$baseURL/rest/search3.view?query=$encoded&$_authParams');
+      final uri =
+          Uri.parse('$baseURL/rest/search3.view?query=$encoded&$_authParams');
       final response = await http.get(uri);
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -219,8 +223,7 @@ class NavidromeService extends ChangeNotifier {
   Future<bool> setStarred(String songId, bool starred) async {
     final endpoint = starred ? 'star.view' : 'unstar.view';
     try {
-      final uri = Uri.parse(
-          '$baseURL/rest/$endpoint?id=$songId&$_authParams');
+      final uri = Uri.parse('$baseURL/rest/$endpoint?id=$songId&$_authParams');
       final response = await http.get(uri);
       return response.statusCode == 200;
     } catch (e) {
@@ -236,8 +239,7 @@ class NavidromeService extends ChangeNotifier {
       return (false, 'Server URL is empty.');
     }
     try {
-      final uri =
-          Uri.parse('$baseURL/rest/ping.view?$_authParams');
+      final uri = Uri.parse('$baseURL/rest/ping.view?$_authParams');
       final response = await http.get(uri);
       if (response.statusCode != 200) {
         return (false, 'Server returned HTTP ${response.statusCode}.');

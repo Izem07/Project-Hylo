@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/player_provider.dart';
+import 'providers/settings_provider.dart';
 import 'screens/connect_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/offline_screen.dart';
@@ -15,8 +16,10 @@ Future<void> main() async {
   // Init singletons that need async setup before the UI starts
   final navidrome = NavidromeService();
   final offline = OfflineManager();
+  final settings = SettingsProvider();
   await navidrome.init();
   await offline.init();
+  await settings.init();
 
   runApp(
     MultiProvider(
@@ -25,6 +28,7 @@ Future<void> main() async {
         ChangeNotifierProvider<OfflineManager>.value(value: offline),
         ChangeNotifierProvider<NetworkMonitor>.value(value: NetworkMonitor()),
         ChangeNotifierProvider<PlayerProvider>(create: (_) => PlayerProvider()),
+        ChangeNotifierProvider<SettingsProvider>.value(value: settings),
       ],
       child: const HyloApp(),
     ),
@@ -36,36 +40,41 @@ class HyloApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Hylo',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0A0A0A),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFF9CC1B),
-          surface: Color(0xFF1A1A1A),
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF0A0A0A),
-          foregroundColor: Colors.white,
-          elevation: 0,
-        ),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Color(0xFF0A0A0A),
-          selectedItemColor: Color(0xFFF9CC1B),
-          unselectedItemColor: Color(0xFF555555),
-          type: BottomNavigationBarType.fixed,
-          showSelectedLabels: false,
-          showUnselectedLabels: false,
-        ),
-        sliderTheme: const SliderThemeData(
-          activeTrackColor: Color(0xFFF9CC1B),
-          thumbColor: Color(0xFFF9CC1B),
-          inactiveTrackColor: Color(0xFF333333),
-        ),
-      ),
-      home: const _RootShell(),
+    return Consumer<SettingsProvider>(
+      builder: (context, settings, _) {
+        final accent = Color(settings.accentColor);
+        return MaterialApp(
+          title: 'Hylo',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            brightness: Brightness.dark,
+            scaffoldBackgroundColor: const Color(0xFF0A0A0A),
+            colorScheme: ColorScheme.dark(
+              primary: accent,
+              surface: const Color(0xFF1A1A1A),
+            ),
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Color(0xFF0A0A0A),
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
+            bottomNavigationBarTheme: BottomNavigationBarThemeData(
+              backgroundColor: const Color(0xFF0A0A0A),
+              selectedItemColor: accent,
+              unselectedItemColor: const Color(0xFF555555),
+              type: BottomNavigationBarType.fixed,
+              showSelectedLabels: false,
+              showUnselectedLabels: false,
+            ),
+            sliderTheme: SliderThemeData(
+              activeTrackColor: accent,
+              thumbColor: accent,
+              inactiveTrackColor: const Color(0xFF333333),
+            ),
+          ),
+          home: const _RootShell(),
+        );
+      },
     );
   }
 }

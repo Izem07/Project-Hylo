@@ -17,26 +17,37 @@ class OfflineScreen extends StatelessWidget {
         final songs = offline.downloadedSongs;
 
         return Scaffold(
-          backgroundColor: const Color(0xFF141414),
+          backgroundColor: const Color(0xFF0A0A0A),
           body: SafeArea(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Header
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                  child: const Text(
+                    'Offline',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+
                 // Status banner
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(12),
+                      color: const Color(0xFF1A1A1A),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
                       children: [
                         Icon(
-                          monitor.isConnected
-                              ? Icons.wifi
-                              : Icons.bolt,
+                          monitor.isConnected ? Icons.wifi : Icons.bolt,
                           color: _yellow,
                           size: 28,
                         ),
@@ -68,12 +79,12 @@ class OfflineScreen extends StatelessWidget {
 
                 // Count badge
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
+                      color: const Color(0xFF1A1A1A),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
                       children: [
@@ -119,8 +130,7 @@ class OfflineScreen extends StatelessWidget {
                               direction: DismissDirection.endToStart,
                               background: Container(
                                 alignment: Alignment.centerRight,
-                                padding:
-                                    const EdgeInsets.only(right: 20),
+                                padding: const EdgeInsets.only(right: 20),
                                 color: Colors.red,
                                 child: const Icon(Icons.delete,
                                     color: Colors.white),
@@ -128,8 +138,8 @@ class OfflineScreen extends StatelessWidget {
                               onDismissed: (_) =>
                                   offline.deleteDownload(song.id),
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 20),
                                 child: SongRow(
                                   song: song,
                                   queue: songs.toList(),
@@ -154,7 +164,7 @@ class OfflineScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: const [
-            Icon(Icons.music_off, color: Color(0xFF888888), size: 48),
+            Icon(Icons.music_note, color: Color(0xFF888888), size: 60),
             SizedBox(height: 12),
             Text(
               'No offline tracks yet',
