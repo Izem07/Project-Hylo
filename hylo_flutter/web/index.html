@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder meta base tag. Flutter will ignore this tag and use
+    the actual build base path when generating the URL.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Hylo — Navidrome client">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Hylo">
+
+  <!-- iPhone XS dimensions for testing -->
+  <meta name="viewport" content="width=375, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <title>Hylo</title>
+  <link rel="manifest" href="manifest.json">
+
+  <style>
+    /* Keep the body exactly iPhone XS size in a browser for easy testing */
+    body {
+      background-color: #141414;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Center a phone-sized frame when the viewport is wider */
+    @media (min-width: 420px) {
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        min-height: 100vh;
+        background-color: #0a0a0a;
+      }
+      #flutter_target {
+        width: 375px;
+        height: 812px;
+        overflow: hidden;
+        position: relative;
+        box-shadow: 0 0 60px rgba(0,0,0,0.8);
+        border-radius: 40px;
+        margin-top: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Flutter renders into this element -->
+  <div id="flutter_target"></div>
+
+  <script>
+    window.addEventListener('load', function(ev) {
+      // Download main.dart.js
+      _flutter.loader.loadEntrypoint({
+        serviceWorker: {
+          serviceWorkerVersion: serviceWorkerVersion,
+        },
+        onEntrypointLoaded: function(engineInitializer) {
+          engineInitializer.initializeEngine({
+            hostElement: document.getElementById("flutter_target"),
+          }).then(function(appRunner) {
+            appRunner.runApp();
+          });
+        }
+      });
+    });
+  </script>
+  <script src="flutter.js" defer></script>
+</body>
+</html>
