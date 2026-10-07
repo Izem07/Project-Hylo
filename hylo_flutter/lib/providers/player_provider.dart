@@ -1,10 +1,10 @@
-// PlayerProvider — ported from Hylo/PlayerViewModel.swift
-// Uses just_audio instead of AVPlayer. No lock-screen metadata on web.
 import 'dart:async';
+import 'dart:math';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import '../models/song.dart';
+import '../providers/settings_provider.dart';
 import '../services/navidrome_service.dart';
 import '../services/offline_manager.dart';
 import '../services/network_monitor.dart';
@@ -21,7 +21,11 @@ class PlayerProvider extends ChangeNotifier {
   String? _playbackError;
 
   List<Song> _queue = [];
+  List<Song> _originalQueue = [];
   int _queueIndex = 0;
+
+  bool _isShuffleEnabled = false;
+  bool _isLoopEnabled = false;
 
   Song? get currentSong => _currentSong;
   bool get isPlaying => _isPlaying;
@@ -32,6 +36,8 @@ class PlayerProvider extends ChangeNotifier {
   String? get playbackError => _playbackError;
   List<Song> get queue => List.unmodifiable(_queue);
   int get queueIndex => _queueIndex;
+  bool get isShuffleEnabled => _isShuffleEnabled;
+  bool get isLoopEnabled => _isLoopEnabled;
 
   PlayerProvider() {
     _init();
@@ -80,20 +86,27 @@ class PlayerProvider extends ChangeNotifier {
     _playbackError = null;
 
     if (queue != null && queue.isNotEmpty) {
-      _queue = queue;
-      _queueIndex = queue.indexWhere((s) => s.id == song.id);
+      _originalQueue = List.from(queue);
+      _queue = List.from(queue);
+      _queueIndex = _queue.indexWhere((s) => s.id == song.id);
       if (_queueIndex < 0) _queueIndex = 0;
+
+      // Re-apply shuffle if enabled
+      if (_isShuffleEnabled) {
+        final current = _queue[_queueIndex];
+        _queue.removeAt(_queueIndex);
+        _queue.shuffle(Random());
+        _queue.insert(0, current);
+        _queueIndex = 0;
+      }
     }
 
     String? urlString;
-
     final offlineMgr = OfflineManager();
     if (offlineMgr.isDownloaded(song.id)) {
       urlString = await offlineMgr.localFileUrl(song.id);
-      debugPrint('Playing from local cache: ${song.title}');
     } else if (NetworkMonitor().isConnected) {
       urlString = NavidromeService().streamUrl(song.id);
-      debugPrint('Streaming from server: ${song.title}');
     } else {
       _playbackError =
           'No connection. Download this track for offline listening.';
@@ -118,7 +131,21 @@ class PlayerProvider extends ChangeNotifier {
         notifyListeners();
         return;
       }
-      await _player.play();
+
+      // Crossfade: fade in over crossfadeDuration seconds
+      final crossfade = SettingsProvider().crossfadeDuration;
+      if (crossfade > 0) {
+        await _player.setVolume(0.0);
+        await _player.play();
+        final steps = crossfade * 10;
+        for (var i = 1; i <= steps; i++) {
+          await Future.delayed(const Duration(milliseconds: 100));
+          await _player.setVolume((i / steps).clamp(0.0, 1.0));
+        }
+      } else {
+        await _player.setVolume(1.0);
+        await _player.play();
+      }
     } catch (e) {
       _playbackError = 'Playback error: ${e.toString()}';
       debugPrint('PlayerProvider.play error: $e');
@@ -145,7 +172,14 @@ class PlayerProvider extends ChangeNotifier {
   Future<void> skipForward() async {
     if (_queueIndex + 1 < _queue.length) {
       _queueIndex++;
-      await play(_queue[_queueIndex], queue: _queue);
+      await play(_queue[_queueIndex]);
+    } else if (_isLoopEnabled && _queue.isNotEmpty) {
+      // Loop: reshuffle if shuffle is on, then restart
+      if (_isShuffleEnabled) {
+        _queue.shuffle(Random());
+      }
+      _queueIndex = 0;
+      await play(_queue[_queueIndex]);
     }
   }
 
@@ -154,11 +188,43 @@ class PlayerProvider extends ChangeNotifier {
       await seek(0);
     } else if (_queueIndex > 0) {
       _queueIndex--;
-      await play(_queue[_queueIndex], queue: _queue);
+      await play(_queue[_queueIndex]);
     } else {
       await seek(0);
     }
   }
+
+  // MARK: - Shuffle
+
+  void toggleShuffle() {
+    _isShuffleEnabled = !_isShuffleEnabled;
+    final current = _currentSong;
+
+    if (_isShuffleEnabled && current != null) {
+      _queue = List.from(_originalQueue);
+      _queue.removeWhere((s) => s.id == current.id);
+      _queue.shuffle(Random());
+      _queue.insert(0, current);
+      _queueIndex = 0;
+    } else {
+      // Restore original order, find current position
+      _queue = List.from(_originalQueue);
+      if (current != null) {
+        _queueIndex = _queue.indexWhere((s) => s.id == current.id);
+        if (_queueIndex < 0) _queueIndex = 0;
+      }
+    }
+    notifyListeners();
+  }
+
+  // MARK: - Loop
+
+  void toggleLoop() {
+    _isLoopEnabled = !_isLoopEnabled;
+    notifyListeners();
+  }
+
+  // MARK: - Like
 
   Future<void> toggleLike() async {
     _isLiked = !_isLiked;

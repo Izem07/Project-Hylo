@@ -1,5 +1,4 @@
 // NavidromeService — ported from Hylo/NavidromeService.swift
-// Uses HTTP package instead of URLSession, crypto for MD5, uuid for salt.
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -14,7 +13,6 @@ class NavidromeService extends ChangeNotifier {
   factory NavidromeService() => _instance;
   NavidromeService._internal();
 
-  // Preference keys (matching Swift UserDefaults keys)
   static const _urlKey = 'hylo_url';
   static const _userKey = 'hylo_user';
   static const _passKey = 'hylo_pass';
@@ -24,11 +22,13 @@ class NavidromeService extends ChangeNotifier {
   String _username = '';
   String _password = '';
   bool _allowInsecure = false;
+  bool _isServerReachable = false;
 
   String get serverURL => _serverURL;
   String get username => _username;
   String get password => _password;
   bool get allowInsecure => _allowInsecure;
+  bool get isServerReachable => _isServerReachable;
 
   set serverURL(String v) {
     _serverURL = v;
@@ -65,25 +65,32 @@ class NavidromeService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // MARK: - Auth helpers
+  // MARK: - Auth
 
-  /// Generate a fresh salt + MD5 token on every call (Subsonic auth spec).
   String get _authParams {
     final salt = const Uuid().v4().replaceAll('-', '').substring(0, 12);
-    final tokenInput = _password + salt;
-    final token = md5.convert(utf8.encode(tokenInput)).toString();
+    final token = md5.convert(utf8.encode(_password + salt)).toString();
     return 'u=$_username&t=$token&s=$salt&v=1.16.1&c=Hylo&f=json';
   }
 
-  /// Normalised base URL: trim trailing slash, prepend https:// when no scheme.
+  /// Real server base URL (used for iOS/Android).
+  /// Real server base URL. Respects the allowInsecure toggle:
+  /// - allowInsecure ON  → keeps http:// as-is (LAN / Tailscale IP)
+  /// - allowInsecure OFF → always uses https://
   String get baseURL {
     var url = _serverURL.trim();
     if (url.endsWith('/')) url = url.substring(0, url.length - 1);
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'https://$url';
+      url = _allowInsecure ? 'http://$url' : 'https://$url';
+    } else if (!_allowInsecure && url.startsWith('http://')) {
+      url = url.replaceFirst('http://', 'https://');
     }
     return url;
   }
+
+  /// On web, route through local CORS proxy only if NAVIDROME_PROXY is set.
+  /// Otherwise use baseURL directly (works when Tailscale is active on the machine).
+  String get _effectiveBase => baseURL;
 
   // MARK: - URL helpers
 
@@ -95,12 +102,20 @@ class NavidromeService extends ChangeNotifier {
         : quality == 'low'
             ? 128
             : 320;
-    return '$baseURL/rest/stream.view?id=$songId&$_authParams&maxBitRate=$bitRate';
+    return '$_effectiveBase/rest/stream.view?id=$songId&$_authParams&maxBitRate=$bitRate';
   }
 
   String? coverArtUrl(String? coverId, {int size = 300}) {
     if (coverId == null || coverId.isEmpty || baseURL.isEmpty) return null;
-    return '$baseURL/rest/getCoverArt.view?id=$coverId&size=$size&$_authParams';
+    return '$_effectiveBase/rest/getCoverArt.view?id=$coverId&size=$size&$_authParams';
+  }
+
+  /// Marks the server as reachable. Called after any successful API response.
+  void _markReachable() {
+    if (!_isServerReachable) {
+      _isServerReachable = true;
+      notifyListeners();
+    }
   }
 
   // MARK: - Albums
@@ -109,17 +124,19 @@ class NavidromeService extends ChangeNotifier {
     if (baseURL.isEmpty) return [];
     try {
       final uri = Uri.parse(
-          '$baseURL/rest/getAlbumList2.view?type=alphabeticalByName&size=100&$_authParams');
+          '$_effectiveBase/rest/getAlbumList2.view?type=alphabeticalByName&size=100&$_authParams');
       final response = await http.get(uri);
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final body = data['subsonic-response'] as Map<String, dynamic>?;
-      final albumList = body?['albumList2'] as Map<String, dynamic>?;
-      final albums = albumList?['album'] as List<dynamic>?;
-      return albums
+      final albums = (body?['albumList2'] as Map<String, dynamic>?)?['album']
+          as List<dynamic>?;
+      final result = albums
               ?.map((a) => Album.fromJson(a as Map<String, dynamic>))
               .toList() ??
           [];
+      _markReachable();
+      return result;
     } catch (e) {
       debugPrint('fetchAlbums error: $e');
       return [];
@@ -131,18 +148,20 @@ class NavidromeService extends ChangeNotifier {
   Future<List<Song>> fetchTracks(String albumId) async {
     if (baseURL.isEmpty) return [];
     try {
-      final uri =
-          Uri.parse('$baseURL/rest/getAlbum.view?id=$albumId&$_authParams');
+      final uri = Uri.parse(
+          '$_effectiveBase/rest/getAlbum.view?id=$albumId&$_authParams');
       final response = await http.get(uri);
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final body = data['subsonic-response'] as Map<String, dynamic>?;
-      final album = body?['album'] as Map<String, dynamic>?;
-      final songs = album?['song'] as List<dynamic>?;
-      return songs
+      final songs =
+          (body?['album'] as Map<String, dynamic>?)?['song'] as List<dynamic>?;
+      final result = songs
               ?.map((s) => Song.fromSubsonic(s as Map<String, dynamic>))
               .toList() ??
           [];
+      _markReachable();
+      return result;
     } catch (e) {
       debugPrint('fetchTracks error: $e');
       return [];
@@ -154,17 +173,20 @@ class NavidromeService extends ChangeNotifier {
   Future<List<Playlist>> fetchPlaylists() async {
     if (baseURL.isEmpty) return [];
     try {
-      final uri = Uri.parse('$baseURL/rest/getPlaylists.view?$_authParams');
+      final uri =
+          Uri.parse('$_effectiveBase/rest/getPlaylists.view?$_authParams');
       final response = await http.get(uri);
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final body = data['subsonic-response'] as Map<String, dynamic>?;
-      final wrapper = body?['playlists'] as Map<String, dynamic>?;
-      final playlists = wrapper?['playlist'] as List<dynamic>?;
-      return playlists
+      final playlists = (body?['playlists']
+          as Map<String, dynamic>?)?['playlist'] as List<dynamic>?;
+      final result = playlists
               ?.map((p) => Playlist.fromJson(p as Map<String, dynamic>))
               .toList() ??
           [];
+      _markReachable();
+      return result;
     } catch (e) {
       debugPrint('fetchPlaylists error: $e');
       return [];
@@ -177,17 +199,19 @@ class NavidromeService extends ChangeNotifier {
     if (baseURL.isEmpty) return [];
     try {
       final uri = Uri.parse(
-          '$baseURL/rest/getPlaylist.view?id=$playlistId&$_authParams');
+          '$_effectiveBase/rest/getPlaylist.view?id=$playlistId&$_authParams');
       final response = await http.get(uri);
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final body = data['subsonic-response'] as Map<String, dynamic>?;
-      final playlist = body?['playlist'] as Map<String, dynamic>?;
-      final entries = playlist?['entry'] as List<dynamic>?;
-      return entries
+      final entries = (body?['playlist'] as Map<String, dynamic>?)?['entry']
+          as List<dynamic>?;
+      final result = entries
               ?.map((s) => Song.fromSubsonic(s as Map<String, dynamic>))
               .toList() ??
           [];
+      _markReachable();
+      return result;
     } catch (e) {
       debugPrint('fetchPlaylistTracks error: $e');
       return [];
@@ -200,14 +224,14 @@ class NavidromeService extends ChangeNotifier {
     if (baseURL.isEmpty || query.isEmpty) return [];
     try {
       final encoded = Uri.encodeQueryComponent(query);
-      final uri =
-          Uri.parse('$baseURL/rest/search3.view?query=$encoded&$_authParams');
+      final uri = Uri.parse(
+          '$_effectiveBase/rest/search3.view?query=$encoded&$_authParams');
       final response = await http.get(uri);
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final body = data['subsonic-response'] as Map<String, dynamic>?;
-      final result = body?['searchResult3'] as Map<String, dynamic>?;
-      final songs = result?['song'] as List<dynamic>?;
+      final songs = (body?['searchResult3'] as Map<String, dynamic>?)?['song']
+          as List<dynamic>?;
       return songs
               ?.map((s) => Song.fromSubsonic(s as Map<String, dynamic>))
               .toList() ??
@@ -223,7 +247,8 @@ class NavidromeService extends ChangeNotifier {
   Future<bool> setStarred(String songId, bool starred) async {
     final endpoint = starred ? 'star.view' : 'unstar.view';
     try {
-      final uri = Uri.parse('$baseURL/rest/$endpoint?id=$songId&$_authParams');
+      final uri =
+          Uri.parse('$_effectiveBase/rest/$endpoint?id=$songId&$_authParams');
       final response = await http.get(uri);
       return response.statusCode == 200;
     } catch (e) {
@@ -232,36 +257,70 @@ class NavidromeService extends ChangeNotifier {
     }
   }
 
+  // MARK: - Liked Songs
+
+  Future<List<Song>> fetchLikedSongs() async {
+    if (baseURL.isEmpty) return [];
+    try {
+      final uri =
+          Uri.parse('$_effectiveBase/rest/getStarred.view?$_authParams');
+      final response = await http.get(uri);
+      if (response.statusCode != 200) return [];
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final body = data['subsonic-response'] as Map<String, dynamic>?;
+      final songs = (body?['starred'] as Map<String, dynamic>?)?['song']
+          as List<dynamic>?;
+      final result = songs
+              ?.map((s) => Song.fromSubsonic(s as Map<String, dynamic>))
+              .toList() ??
+          [];
+      _markReachable();
+      return result;
+    } catch (e) {
+      debugPrint('fetchLikedSongs error: $e');
+      return [];
+    }
+  }
+
   // MARK: - Connection test
 
   Future<(bool, String?)> testConnection() async {
-    if (baseURL.isEmpty) {
-      return (false, 'Server URL is empty.');
-    }
+    if (baseURL.isEmpty) return (false, 'Server URL is empty.');
     try {
-      final uri = Uri.parse('$baseURL/rest/ping.view?$_authParams');
+      final uri = Uri.parse('$_effectiveBase/rest/ping.view?$_authParams');
       final response = await http.get(uri);
       if (response.statusCode != 200) {
+        _isServerReachable = false;
+        notifyListeners();
         return (false, 'Server returned HTTP ${response.statusCode}.');
       }
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final root = data['subsonic-response'] as Map<String, dynamic>?;
       if (root == null) {
+        _isServerReachable = false;
+        notifyListeners();
         return (false, 'Unexpected server response.');
       }
       final error = root['error'] as Map<String, dynamic>?;
       if (error != null) {
+        _isServerReachable = false;
+        notifyListeners();
         final code = error['code'];
-        if (code == 40 || code == 41) {
+        if (code == 40 || code == 41)
           return (false, 'Authentication failed — check your credentials.');
-        }
         return (false, error['message']?.toString() ?? 'Server error.');
       }
       if (root['status'] == 'ok') {
+        _isServerReachable = true;
+        notifyListeners();
         return (true, null);
       }
+      _isServerReachable = false;
+      notifyListeners();
       return (false, 'Server returned an error.');
     } catch (e) {
+      _isServerReachable = false;
+      notifyListeners();
       return (false, e.toString());
     }
   }

@@ -203,11 +203,17 @@ class NowPlayingScreen extends StatelessWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // Repeat (stub)
-                        Icon(
-                          Icons.repeat,
-                          color: const Color(0xFF888888).withValues(alpha: 0.6),
-                          size: 22,
+                        // Repeat
+                        GestureDetector(
+                          onTap: () => player.toggleLoop(),
+                          child: Icon(
+                            Icons.repeat,
+                            color: player.isLoopEnabled
+                                ? _yellow
+                                : const Color(0xFF888888)
+                                    .withValues(alpha: 0.6),
+                            size: 22,
+                          ),
                         ),
                         // Skip back
                         Semantics(
@@ -249,11 +255,17 @@ class NowPlayingScreen extends StatelessWidget {
                             onPressed: () => player.skipForward(),
                           ),
                         ),
-                        // Shuffle (stub)
-                        Icon(
-                          Icons.shuffle,
-                          color: const Color(0xFF888888).withValues(alpha: 0.6),
-                          size: 22,
+                        // Shuffle
+                        GestureDetector(
+                          onTap: () => player.toggleShuffle(),
+                          child: Icon(
+                            Icons.shuffle,
+                            color: player.isShuffleEnabled
+                                ? _yellow
+                                : const Color(0xFF888888)
+                                    .withValues(alpha: 0.6),
+                            size: 22,
+                          ),
                         ),
                       ],
                     ),

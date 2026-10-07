@@ -5,8 +5,9 @@ import 'package:provider/provider.dart';
 import '../models/album.dart';
 import '../models/playlist.dart';
 import '../models/song.dart';
+import '../providers/player_provider.dart';
+import '../screens/liked_songs_screen.dart';
 import '../services/navidrome_service.dart';
-import '../services/network_monitor.dart';
 import '../widgets/album_cell.dart';
 import '../widgets/song_row.dart';
 
@@ -65,13 +66,11 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   Future<void> _loadContent() async {
     final navidrome = context.read<NavidromeService>();
-    final monitor = context.read<NetworkMonitor>();
 
     if (navidrome.serverURL.trim().isEmpty ||
         navidrome.username.trim().isEmpty) {
       return;
     }
-    if (!monitor.isConnected) return;
 
     setState(() => _isLoading = true);
 
@@ -96,7 +95,7 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   @override
   Widget build(BuildContext context) {
-    final monitor = context.watch<NetworkMonitor>();
+    final navidrome = context.watch<NavidromeService>();
     context.watch<
         NavidromeService>(); // trigger didChangeDependencies on credential changes
 
@@ -127,13 +126,14 @@ class _LibraryScreenState extends State<LibraryScreen>
                         animation: _dotOpacity,
                         builder: (context, child) {
                           return Opacity(
-                            opacity:
-                                monitor.isConnected ? _dotOpacity.value : 1.0,
+                            opacity: navidrome.isServerReachable
+                                ? _dotOpacity.value
+                                : 1.0,
                             child: Container(
                               width: 7,
                               height: 7,
                               decoration: BoxDecoration(
-                                color: monitor.isConnected
+                                color: navidrome.isServerReachable
                                     ? Colors.green
                                     : Colors.red,
                                 shape: BoxShape.circle,
@@ -144,9 +144,11 @@ class _LibraryScreenState extends State<LibraryScreen>
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        monitor.isConnected
+                        navidrome.isServerReachable
                             ? 'Live from server'
-                            : 'Server unreachable',
+                            : navidrome.serverURL.isEmpty
+                                ? 'Not configured'
+                                : 'Server unreachable',
                         style: const TextStyle(
                             color: Color(0xFF888888), fontSize: 12),
                       ),
@@ -203,27 +205,84 @@ class _LibraryScreenState extends State<LibraryScreen>
             'No albums found.\nMake sure your server is reachable and credentials are correct.',
       );
     }
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.78,
-      ),
-      itemCount: _albums.length,
-      itemBuilder: (context, i) {
-        final album = _albums[i];
-        return GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AlbumDetailScreen(album: album),
+    return CustomScrollView(
+      slivers: [
+        // Liked Songs card
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+            child: GestureDetector(
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const LikedSongsScreen())),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1A1A),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF2A2A2A)),
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9CC1B).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.favorite,
+                        color: Color(0xFFF9CC1B), size: 22),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Liked Songs',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold)),
+                          SizedBox(height: 2),
+                          Text('Your starred tracks',
+                              style: TextStyle(
+                                  color: Color(0xFF888888), fontSize: 12)),
+                        ]),
+                  ),
+                  const Icon(Icons.chevron_right,
+                      color: Color(0xFF888888), size: 18),
+                ]),
+              ),
             ),
           ),
-          child: AlbumCell(album: album),
-        );
-      },
+        ),
+
+        // Album grid
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+          sliver: SliverGrid(
+            delegate: SliverChildBuilderDelegate(
+              (context, i) {
+                final album = _albums[i];
+                return GestureDetector(
+                  onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => AlbumDetailScreen(album: album))),
+                  child: AlbumCell(album: album),
+                );
+              },
+              childCount: _albums.length,
+            ),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: 0.78,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -508,6 +567,36 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                               style: const TextStyle(
                                   color: Color(0xFF888888), fontSize: 12),
                             ),
+                            const SizedBox(height: 10),
+                            // Play All button
+                            if (_songs.isNotEmpty)
+                              GestureDetector(
+                                onTap: () {
+                                  final player = context.read<PlayerProvider>();
+                                  player.play(_songs.first, queue: _songs);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 18, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF9CC1B),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.play_arrow,
+                                          color: Colors.black, size: 16),
+                                      SizedBox(width: 4),
+                                      Text('Play All',
+                                          style: TextStyle(
+                                              color: Colors.black,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),
